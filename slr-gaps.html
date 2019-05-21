@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="plotly1.47.4.min.js"></script>
+    <script src="ml3.3.0.min.js"></script>
+    <script src="lodash4.17.11.min.js"></script>
+</head>
+<body>
+    <a href="?mode=data">data</a>
+    <a href="?mode=all">all</a>
+
+    <div id="myDiv"></div>
+    <div id="notes"></div>
+
+    <script>
+      const SLR = window.ML.SimpleLinearRegression;
+      const TSR = window.ML.TheilSenRegression;
+
+
+      //load the data
+      Plotly.d3.csv("testgaps.csv",function(data) {
+
+        const targetSeries = _.filter(data, {seriesname: 'target'});
+        const targetX = _.map(targetSeries, ({x}) => +x);
+        const targetY = _.map(targetSeries, ({y}) => +y);
+        //const targetRegressionModel = new SLR(targetX, targetY); // Train the model on training data
+        const targetRegressionModel = new SLR(targetX, targetY); // Train the model on training data
+        const targetRegressionFunction = targetRegressionModel.toString(3);
+
+        var target = {
+            x: targetX,
+            y: targetY,
+            type: 'scatter',
+            name: 'Target',
+        };
+
+        const targetXFull = _.flatten([targetX, 16, 17, 18, 19, 20]);
+        var targetRegression = {
+            x: targetXFull,
+            y: _.map(targetXFull, (x) => targetRegressionModel.predict(x)),
+            type: 'scatter',
+            name: 'Target Regression',
+        };
+
+        const actualSeries = _.filter(data, {seriesname: 'actual'});
+        const actualX = _.map(actualSeries, ({x}) => +x);
+        const actualY = _.map(actualSeries, ({y}) => +y);
+        //const actualRegressionModel = new SLR(actualX, actualY); // Train the model on training data
+        const actualRegressionModel = new SLR(actualX, actualY); // Train the model on training data
+        const actualRegressionFunction = actualRegressionModel.toString(3);
+
+        var actual = {
+          x: actualX,
+          y: actualY,
+          type: 'scatter',
+          name: 'Actual',
+        };
+
+        const actualXFull = _.flatten([actualX, 16, 17, 18, 19, 20]);
+        var actualRegression = {
+          x: actualXFull,
+          y: _.map(actualXFull, (x) => actualRegressionModel.predict(x)),
+          type: 'scatter',
+          name: 'Actual Regression',
+        };
+
+        const discrepancyPercent = (1 - targetRegressionModel.slope /  actualRegressionModel.slope).toFixed(2) * 100;
+        const bufferPercent = (actualRegressionModel.slope /  targetRegressionModel.slope - 1).toFixed(2) * 100;
+
+        var actualWithBuffer = {
+          x: actualXFull,
+          y: _.map(actualXFull, (x) => actualRegressionModel.predict(x) * (bufferPercent + 100) / 100),
+          type: 'scatter',
+          name: 'Target+Buffer',
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode');
+
+        var data = mode === 'data' ? [target, actual] : [target, targetRegression, actual, actualRegression, actualWithBuffer] ;
+
+
+        var layout = {
+          title: 'least squares estimates with gaps',
+          xaxis: {
+            title: 'day',
+            showgrid: false,
+            zeroline: false,
+            range: [-5, 25]
+          },
+          yaxis: {
+            title: 'impressions',
+            showline: false,
+            range: [0, 600000]
+          }
+        };
+        Plotly.newPlot('myDiv', data, layout, {showSendToCloud: true});
+
+        const notesEl = document.getElementById('notes');
+        notesEl.innerHTML = `
+            Target Regression: ${targetRegressionFunction}<br>
+            Actual Regression: ${actualRegressionFunction}<br>
+            Discrepancy ${discrepancyPercent}%<br>
+            Buffer ${bufferPercent}%<br>
+            Forecast Target Day 20: ${Math.round(actualRegressionModel.predict(20))}<br>
+            Forecast Target+Buffer Day 20: ${Math.round(actualRegressionModel.predict(20) * (bufferPercent / 100 + 1))}<br>
+        `;
+
+      });
+
+    </script>
+</body>
+</html>
